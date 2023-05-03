@@ -67,24 +67,22 @@ public class MostTrustedPicker implements IOutcomePicker{
 			
 			var outcomeStatistics = database.getOutcomeStatisticsForChannel(bettingPrediction.getEvent().getChannelId(), minTotalBetsPlacedByUser);
 			
-			Map<OutcomeStatistic, Double> gewichteteSummen = new HashMap<>();
-			double summeDerGewichte = 0;
+			Map<OutcomeStatistic, Double> weightedSums = new HashMap<>();
+			double sumOfWeights = 0;
 			for (OutcomeStatistic outcomeStatistic : outcomeStatistics) {
-				double gewicht = calculateWeight(outcomeStatistic.getAverageWinRate(), (int) outcomeStatistic.getAverageUserBetsPlaced(), 20);
-				double gewichteteAnzahl = outcomeStatistic.getUserCnt() * gewicht;
-				gewichteteSummen.put(outcomeStatistic, gewichteteAnzahl);
-				summeDerGewichte += gewicht;
+				double weight = calculateWeight(outcomeStatistic.getAverageWinRate(), (int) outcomeStatistic.getAverageUserBetsPlaced(), 20);
+				double weightedCount = outcomeStatistic.getUserCnt() * weight;
+				weightedSums.put(outcomeStatistic, weightedCount);
+				sumOfWeights += weight;
 			}
 			
-			// Normalisierung der Gewichte
-			double finalSummeDerGewichte = summeDerGewichte;
-			gewichteteSummen.replaceAll((outcomeStatistic, gewichteteAnzahl) -> gewichteteAnzahl / finalSummeDerGewichte);
+			double finalSumOfWeights = sumOfWeights;
+			weightedSums.replaceAll((outcomeStatistic, weightedCount) -> weightedCount / finalSumOfWeights);
 			
-			// Wählen Sie das wahrscheinlichste Outcome
-			var mostTrusted = gewichteteSummen.entrySet().stream()
+			var mostTrusted = weightedSums.entrySet().stream()
 					.max(Map.Entry.comparingByValue())
 					.map(Map.Entry::getKey)
-					.orElseThrow(() -> new BetPlacementException("Keine Ausgangsstatistiken gefunden. Vielleicht wurden noch nicht genügend Daten gesammelt."));
+					.orElseThrow(() -> new BetPlacementException("No outcome statistics found. Perhaps not enough data has been collected yet."));
 			
 			for(var outcomeStats : outcomeStatistics){
 				log.info("Outcome stats for '{}': {}", outcomeStats.getBadge(), outcomeStats.toString());
