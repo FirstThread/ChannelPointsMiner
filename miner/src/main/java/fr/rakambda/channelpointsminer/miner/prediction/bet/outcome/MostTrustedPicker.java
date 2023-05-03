@@ -19,6 +19,8 @@ import lombok.ToString;
 import lombok.extern.log4j.Log4j2;
 import org.jetbrains.annotations.NotNull;
 import java.util.Comparator;
+import java.util.HashMap;
+import java.util.Map;
 
 @JsonTypeName("mostTrusted")
 @Getter
@@ -44,6 +46,14 @@ public class MostTrustedPicker implements IOutcomePicker{
 	@Builder.Default
 	private int minTotalBetsPlacedOnOutcome = 5;
 	
+	private double calculateWeight(double winRate, int predictionCount, int threshold) {
+		if (predictionCount >= threshold) {
+			return winRate * predictionCount;
+		} else {
+			return winRate * (predictionCount / (double) threshold);
+		}
+	}
+	
 	@Override
 	@NotNull
 	public Outcome chooseOutcome(@NotNull BettingPrediction bettingPrediction, @NotNull IDatabase database) throws BetPlacementException{
@@ -58,9 +68,24 @@ public class MostTrustedPicker implements IOutcomePicker{
 			
 			var outcomeStatistics = database.getOutcomeStatisticsForChannel(bettingPrediction.getEvent().getChannelId(), minTotalBetsPlacedByUser);
 			
-			var mostTrusted = outcomeStatistics.stream()
-					.max(Comparator.comparingDouble(OutcomeStatistic::getAverageReturnOnInvestment))
-					.orElseThrow(() -> new BetPlacementException("No outcome statistics found. Maybe not enough data gathered yet."));
+			Map<OutcomeStatistic, Double> gewichteteSummen = new HashMap<>();
+			double summeDerGewichte = 0;
+			for (OutcomeStatistic outcomeStatistic : outcomeStatistics) {
+				double gewicht = calculateWeight(outcomeStatistic.getAverageWinRate(), (int) outcomeStatistic.getAverageUserBetsPlaced(), 20);
+				double gewichteteAnzahl = outcomeStatistic.getUserCnt() * gewicht;
+				gewichteteSummen.put(outcomeStatistic, gewichteteAnzahl);
+				summeDerGewichte += gewicht;
+			}
+			
+			// Normalisierung der Gewichte
+			double finalSummeDerGewichte = summeDerGewichte;
+			gewichteteSummen.replaceAll((outcomeStatistic, gewichteteAnzahl) -> gewichteteAnzahl / finalSummeDerGewichte);
+			
+			// Wählen Sie das wahrscheinlichste Outcome
+			var mostTrusted = gewichteteSummen.entrySet().stream()
+					.max(Map.Entry.comparingByValue())
+					.map(Map.Entry::getKey)
+					.orElseThrow(() -> new BetPlacementException("Keine Ausgangsstatistiken gefunden. Vielleicht wurden noch nicht genügend Daten gesammelt."));
 			
 			for(var outcomeStats : outcomeStatistics){
 				log.info("Outcome stats for '{}': {}", outcomeStats.getBadge(), outcomeStats.toString());
