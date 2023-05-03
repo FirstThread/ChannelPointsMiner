@@ -7,7 +7,7 @@
 /target
 bin/
 /.github/antora-docs
-
+/viewer/src/main/resources/application.yml
 /.github/antora-docs
 
 *.iml
